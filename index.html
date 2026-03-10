@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>聲音二選一 (Round 1/Stage 1)</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #5b6474;
+      --line: #dde3ee;
+      --primary: #1f5eff;
+      --soft: #eef4ff;
+      --danger: #b42318;
+      --radius: 18px;
+      --shadow: 0 12px 32px rgba(17, 24, 39, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 14px 40px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px 18px;
+      border: 1px solid rgba(221, 227, 238, 0.7);
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 1.35rem;
+      line-height: 1.4;
+    }
+
+    .subtle {
+      color: var(--muted);
+      line-height: 1.8;
+      margin: 0 0 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      font-weight: 700;
+      font-size: 0.98rem;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 12px;
+      font-size: 1rem;
+      background: #fff;
+    }
+
+    .button-row {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 15px;
+      padding: 15px 16px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .06s ease, opacity .2s ease;
+    }
+
+    button:active { transform: scale(0.985); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #edf2fa;
+      color: var(--text);
+    }
+
+    .btn-answer {
+      background: #172033;
+      color: #fff;
+    }
+
+    .btn-answer.alt {
+      background: #394152;
+    }
+
+    .progress {
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #344054;
+    }
+
+    .notice {
+      margin-top: 12px;
+      color: var(--danger);
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .small {
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .center { text-align: center; }
+
+    @media (min-width: 680px) {
+      .card { padding: 28px 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <div id="app"></div>
+    </div>
+  </div>
+
+  <audio id="audioPlayer" preload="auto"></audio>
+
+  <script>
+    const CONFIG = {
+      endpointUrl: "https://script.google.com/macros/s/AKfycbz2Obw-lKcZQ4ko3XDZNCgvecxVzviVVpB-nKgpQRdtneeufySRk88Hbe2MPjbxxX3MKg/exec", // 換成你的 Google Apps Script Web App URL
+      appVersion: "stage1-cloud-v1",
+      audioBase: "audio/",
+      audioExt: "mp3",
+      totalPairs: ["A", "B", "C"],
+      maxInitialPerPair: 12,
+      maxFallbackPerPair: 4,
+      steps: Array.from({ length: 10 }, (_, i) => i + 1),
+      pairMeta: {
+        A: {
+          title: "第1組：ㄝ還是ㄝㄚ",
+          leftLabel: "Getch (ㄝ)",
+          rightLabel: "Gatch (ㄝㄚ)"
+        },
+        B: {
+          title: "第2組：ㄧ還是ㄧㄜ",
+          leftLabel: "Neef (ㄧ)",
+          rightLabel: "Niff (ㄧㄜ)"
+        },
+        C: {
+          title: "第3組：ㄝ還是ㄝㄧ",
+          leftLabel: "Heff (ㄝ)",
+          rightLabel: "Hafe (ㄝㄧ)"
+        }
+      }
+    };
+
+    const app = document.getElementById("app");
+    const audioPlayer = document.getElementById("audioPlayer");
+
+    const state = {
+      participantId: createParticipantId(),
+      name: "",
+      phone: "",
+      classNo: "",
+      startAt: null,
+      endAt: null,
+      pairIndex: 0,
+      pairRuns: [],
+      currentRun: null,
+      submission: null
+    };
+
+    function createParticipantId() {
+      return `R1_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    }
+
+    function render(html) {
+      app.innerHTML = html;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (m) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[m]));
+    }
+
+    function fileName(pair, step) {
+      return `${CONFIG.audioBase}${pair}_${String(step).padStart(2, "0")}.${CONFIG.audioExt}`;
+    }
+
+    function isValidPhone(phone) {
+      if (!phone.trim()) return true;
+      return /^[0-9+\-\s()]{8,20}$/.test(phone.trim());
+    }
+
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    async function unlockAudio() {
+      return;
+    }
+
+    function playSingle(pair, step) {
+      return new Promise((resolve, reject) => {
+        const pretty = `${pair}_${String(step).padStart(2, "0")}`;
+        audioPlayer.onended = () => resolve();
+        audioPlayer.onerror = () => reject(new Error(`音檔播放失敗：${pretty}。請確認 audio 資料夾內存在 ${pretty}.${CONFIG.audioExt}`));
+        audioPlayer.src = fileName(pair, step);
+        audioPlayer.currentTime = 0;
+        const p = audioPlayer.play();
+        if (p) {
+          p.catch(() => reject(new Error(`無法播放 ${pretty}。請確認音檔路徑正確，並使用瀏覽器開啟頁面後再點擊播放按鈕。`)));
+        }
+      });
+    }
+
+    function createPairRun(pair) {
+      return {
+        pair,
+        startedAt: nowIso(),
+        completedAt: null,
+        stage: "anchors",
+        askedSteps: [],
+        responsesByStep: {},
+        logs: [],
+        lowBracket: null,
+        highBracket: null,
+        rung1Resolved: false,
+        rung2Resolved: false,
+        preciseBand: null,
+        coarseWindow: null,
+        status: "running",
+        fallbackStarted: false,
+        finalReason: ""
+      };
+    }
+
+    function pushResponse(run, step, choice, phase) {
+      if (!run.responsesByStep[step]) {
+        run.responsesByStep[step] = { A1: 0, A2: 0, total: 0, history: [] };
+      }
+      run.responsesByStep[step][choice] += 1;
+      run.responsesByStep[step].total += 1;
+      run.responsesByStep[step].history.push({ choice, phase, at: nowIso() });
+      run.askedSteps.push(step);
+      run.logs.push({
+        order: run.logs.length + 1,
+        phase,
+        step,
+        file: `${run.pair}_${String(step).padStart(2, "0")}`,
+        response: choice,
+        at: nowIso()
+      });
+    }
+
+    function countFor(run, step, choice) {
+      return run.responsesByStep[step]?.[choice] || 0;
+    }
+
+    function classifyMajority(run, step) {
+      const row = run.responsesByStep[step];
+      if (!row) return null;
+      if (row.A1 > row.A2) return "A1";
+      if (row.A2 > row.A1) return "A2";
+      return null;
+    }
+
+    function hasTwoConsistent(run, step, choice) {
+      return countFor(run, step, choice) >= 2;
+    }
+
+    function highestMajorityA1(run) {
+      let found = null;
+      for (const step of CONFIG.steps) {
+        if (classifyMajority(run, step) === "A1") found = step;
+      }
+      return found;
+    }
+
+    function lowestMajorityA2(run) {
+      for (const step of CONFIG.steps) {
+        if (classifyMajority(run, step) === "A2") return step;
+      }
+      return null;
+    }
+
+    function findAdjacentBracket(run) {
+      for (let s = 1; s <= 9; s++) {
+        if (classifyMajority(run, s) === "A1" && classifyMajority(run, s + 1) === "A2") {
+          return { low: s, high: s + 1 };
+        }
+      }
+      return null;
+    }
+
+    function bracketNeedsConfirmation(run, low, high) {
+      return !(hasTwoConsistent(run, low, "A1") && hasTwoConsistent(run, high, "A2"));
+    }
+
+    function chooseNextForConfirmation(run, low, high) {
+      if (!hasTwoConsistent(run, low, "A1")) return low;
+      if (!hasTwoConsistent(run, high, "A2")) return high;
+      return null;
+    }
+
+    function findCoarseWindow(run) {
+      const maxA1 = highestMajorityA1(run);
+      const minA2 = lowestMajorityA2(run);
+      if (maxA1 == null || minA2 == null) return null;
+      if (minA2 - maxA1 >= 2) {
+        return { low: maxA1, high: minA2 };
+      }
+      if (minA2 - maxA1 === 1) {
+        if (minA2 + 1 <= 10 && classifyMajority(run, minA2 + 1) === "A2") {
+          return { low: maxA1, high: minA2 + 1 };
+        }
+        if (maxA1 - 1 >= 1 && classifyMajority(run, maxA1 - 1) === "A1") {
+          return { low: maxA1 - 1, high: minA2 };
+        }
+      }
+      return null;
+    }
+
+    function chooseSearchProbe(run) {
+      const bracket = findAdjacentBracket(run);
+      if (bracket) {
+        run.lowBracket = bracket.low;
+        run.highBracket = bracket.high;
+        return chooseNextForConfirmation(run, bracket.low, bracket.high);
+      }
+
+      const low = highestMajorityA1(run) ?? 2;
+      const high = lowestMajorityA2(run) ?? 9;
+      if (high - low <= 1) return null;
+
+      let probe = Math.floor((low + high) / 2);
+      const askedTooOften = (run.responsesByStep[probe]?.total || 0) >= 2;
+
+      if (!askedTooOften) return probe;
+
+      for (let offset = 1; offset <= 3; offset++) {
+        const left = probe - offset;
+        const right = probe + offset;
+        if (left > low && (run.responsesByStep[left]?.total || 0) < 2) return left;
+        if (right < high && (run.responsesByStep[right]?.total || 0) < 2) return right;
+      }
+      return null;
+    }
+
+    function decideNextStep(run) {
+      const initialCount = run.logs.length;
+      const bracket = findAdjacentBracket(run);
+
+      if (bracket && !bracketNeedsConfirmation(run, bracket.low, bracket.high)) {
+        run.lowBracket = bracket.low;
+        run.highBracket = bracket.high;
+        run.rung1Resolved = true;
+        run.preciseBand = `${bracket.low}/${bracket.high}`;
+        run.status = "resolved_rung1";
+        run.finalReason = "rung1_double_confirmed";
+        return null;
+      }
+
+      if (!run.fallbackStarted && initialCount < CONFIG.maxInitialPerPair) {
+        return chooseSearchProbe(run);
+      }
+
+      if (!run.fallbackStarted) {
+        run.fallbackStarted = true;
+        run.stage = "fallback_rung2";
+      }
+
+      const coarse = findCoarseWindow(run);
+      if (coarse) {
+        const lowDone = hasTwoConsistent(run, coarse.low, "A1");
+        const highDone = hasTwoConsistent(run, coarse.high, "A2");
+        if (lowDone && highDone) {
+          run.rung2Resolved = true;
+          run.coarseWindow = `${coarse.low}-${coarse.high}`;
+          run.status = "resolved_rung2";
+          run.finalReason = "rung2_double_confirmed";
+          return null;
+        }
+        if (!lowDone) return coarse.low;
+        if (!highDone) return coarse.high;
+      }
+
+      const totalAllowed = CONFIG.maxInitialPerPair + CONFIG.maxFallbackPerPair;
+      if (run.logs.length >= totalAllowed) {
+        run.status = "unresolved";
+        run.finalReason = "max_items_reached";
+        return null;
+      }
+
+      if (coarse) {
+        if (coarse.low - 1 >= 1 && (run.responsesByStep[coarse.low - 1]?.total || 0) < 2) return coarse.low - 1;
+        if (coarse.high + 1 <= 10 && (run.responsesByStep[coarse.high + 1]?.total || 0) < 2) return coarse.high + 1;
+      }
+
+      const low = highestMajorityA1(run);
+      const high = lowestMajorityA2(run);
+      if (low != null && !hasTwoConsistent(run, low, "A1")) return low;
+      if (high != null && !hasTwoConsistent(run, high, "A2")) return high;
+
+      run.status = "unresolved";
+      run.finalReason = "no_stable_window";
+      return null;
+    }
+
+    function getNextStep(run) {
+      if (run.logs.length < 4) {
+        run.stage = "anchors";
+        return [1, 10, 2, 9][run.logs.length] ?? null;
+      }
+      return decideNextStep(run);
+    }
+
+    function showWelcome() {
+      const options = Array.from({ length: 15 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+      render(`
+        <h2 class="section-title">Round 1：聲音二選一 </h2>
+        <p class="subtle">1. 本實驗限正音師填答。<br>2. 個資僅供抽獎用，一切資料嚴守實驗倫理與保密原則。<br>3. 完成本實驗約費時2分鐘，建議找安靜的環境，有無耳機皆可。</p>
+        <div class="field">
+          <label for="name">姓名</label>
+          <input id="name" type="text" placeholder="請輸入姓名" value="${escapeHtml(state.name)}" />
+        </div>
+        <div class="field">
+          <label for="classNo">班別</label>
+          <select id="classNo">
+            <option value="">請選擇班別</option>
+            ${options}
+          </select>
+        </div>
+        <div class="field">
+          <label for="phone">電話</label>
+          <input id="phone" type="tel" placeholder="請輸入電話號碼" value="${escapeHtml(state.phone)}" />
+        </div>
+        <div class="button-row">
+          <button id="startBtn" class="btn-primary">準備完請按下一步</button>
+        </div>
+        <div id="welcomeNotice" class="notice"></div>
+      `);
+
+      document.getElementById("classNo").value = state.classNo;
+
+      document.getElementById("startBtn").addEventListener("click", async () => {
+        const name = document.getElementById("name").value.trim();
+        const phone = document.getElementById("phone").value.trim();
+        const classNo = document.getElementById("classNo").value;
+
+        if (!name) {
+          document.getElementById("welcomeNotice").textContent = "請填寫姓名。";
+          return;
+        }
+        if (!classNo) {
+          document.getElementById("welcomeNotice").textContent = "請選擇班別。";
+          return;
+        }
+        if (!isValidPhone(phone)) {
+          document.getElementById("welcomeNotice").textContent = "請輸入正確的電話號碼，或留白。";
+          return;
+        }
+
+        try {
+          await unlockAudio();
+          state.name = name;
+          state.phone = phone;
+          state.classNo = classNo;
+          state.startAt = nowIso();
+          showGlobalPracticeIntro();
+        } catch (err) {
+          renderError(err.message);
+        }
+      });
+    }
+
+    function showGlobalPracticeIntro() {
+      render(`
+        <h2 class="section-title">實驗說明</h2>
+        <p class="subtle">以下有三組假字，每組包含兩個對比聲音。請逐一試聽，將注意力放在聽出母音是否不同。</p>
+        <div class="subtle">
+          第1組：Getch (ㄝ) 、 Gatch (ㄝㄚ)<br>
+          第2組：Neef (微笑ㄧ) 、 Niff (ㄧㄜ)<br>
+          第3組：Heff (ㄝ) 、 Hafe (ㄝㄧ)
+        </div>
+        <p class="subtle">請逐一試聽以下音檔：</p>
+        <div class="button-row">
+          <button id="gpA1" class="btn-secondary">Getch</button>
+          <button id="gpA2" class="btn-secondary">Gatch</button>
+          <button id="gpB1" class="btn-secondary">Neef</button>
+          <button id="gpB2" class="btn-secondary">Niff</button>
+          <button id="gpC1" class="btn-secondary">Heff</button>
+          <button id="gpC2" class="btn-secondary">Hafe</button>
+          <button id="practiceNextBtn" class="btn-primary">下一步</button>
+        </div>
+        <p class="small">全部聽完後請按下一步開始遊戲。<br>播放次數無限制，若不確定聲音比較接近哪一個，可多聽幾次。</p>
+      `);
+
+      document.getElementById("gpA1").addEventListener("click", () => playSingle("A", 1).catch(err => renderError(err.message)));
+      document.getElementById("gpA2").addEventListener("click", () => playSingle("A", 10).catch(err => renderError(err.message)));
+      document.getElementById("gpB1").addEventListener("click", () => playSingle("B", 1).catch(err => renderError(err.message)));
+      document.getElementById("gpB2").addEventListener("click", () => playSingle("B", 10).catch(err => renderError(err.message)));
+      document.getElementById("gpC1").addEventListener("click", () => playSingle("C", 1).catch(err => renderError(err.message)));
+      document.getElementById("gpC2").addEventListener("click", () => playSingle("C", 10).catch(err => renderError(err.message)));
+
+      document.getElementById("practiceNextBtn").addEventListener("click", () => {
+        state.pairIndex = 0;
+        state.pairRuns = [];
+        const run = createPairRun(CONFIG.totalPairs[state.pairIndex]);
+        state.currentRun = run;
+        state.pairRuns.push(run);
+        showPairQuestion();
+      });
+    }
+
+    function showPairQuestion() {
+      const run = state.currentRun;
+      const pair = run.pair;
+      const nextStep = getNextStep(run);
+
+      if (nextStep == null) {
+        finishCurrentPair();
+        return;
+      }
+
+      const meta = CONFIG.pairMeta[pair];
+
+      render(`
+        <div class="progress">目前進度：第${state.pairIndex + 1}組/共3組</div>
+        <h2 class="section-title">${meta.title}</h2>
+        <div class="button-row">
+          <button id="playBtn" class="btn-primary">播放本題聲音</button>
+          <button id="leftBtn" class="btn-answer" disabled>${meta.leftLabel}</button>
+          <button id="rightBtn" class="btn-answer alt" disabled>${meta.rightLabel}</button>
+        </div>
+        <div id="questionNotice" class="notice"></div>
+      `);
+
+      const playBtn = document.getElementById("playBtn");
+      const leftBtn = document.getElementById("leftBtn");
+      const rightBtn = document.getElementById("rightBtn");
+
+      playBtn.addEventListener("click", async () => {
+        playBtn.disabled = true;
+        playBtn.textContent = "播放中...";
+        try {
+          await playSingle(pair, nextStep);
+          leftBtn.disabled = false;
+          rightBtn.disabled = false;
+          playBtn.disabled = false;
+          playBtn.textContent = "播放本題聲音";
+        } catch (err) {
+          document.getElementById("questionNotice").textContent = err.message;
+          playBtn.disabled = false;
+          playBtn.textContent = "播放本題聲音";
+        }
+      });
+
+      leftBtn.addEventListener("click", () => {
+        pushResponse(run, nextStep, "A1", run.stage);
+        showPairQuestion();
+      });
+
+      rightBtn.addEventListener("click", () => {
+        pushResponse(run, nextStep, "A2", run.stage);
+        showPairQuestion();
+      });
+    }
+
+    function finishCurrentPair() {
+      const run = state.currentRun;
+      run.completedAt = nowIso();
+      if (run.status === "running") {
+        run.status = "unresolved";
+        run.finalReason = "manual_finish_without_resolution";
+      }
+
+      if (state.pairIndex < CONFIG.totalPairs.length - 1) {
+        state.pairIndex += 1;
+        const nextRun = createPairRun(CONFIG.totalPairs[state.pairIndex]);
+        state.currentRun = nextRun;
+        state.pairRuns.push(nextRun);
+        showPairQuestion();
+      } else {
+        finalizeStudy();
+      }
+    }
+
+    function buildSubmission() {
+      return {
+        participant_id: state.participantId,
+        name: state.name,
+        phone: state.phone,
+        class_no: state.classNo,
+        round: 1,
+        stage: 1,
+        start_at: state.startAt,
+        end_at: state.endAt,
+        user_agent: navigator.userAgent,
+        pair_runs: state.pairRuns.map(run => ({
+          pair: run.pair,
+          started_at: run.startedAt,
+          completed_at: run.completedAt,
+          status: run.status,
+          precise_band: run.preciseBand,
+          coarse_window: run.coarseWindow,
+          final_reason: run.finalReason,
+          total_items: run.logs.length,
+          responses_by_step: run.responsesByStep,
+          logs: run.logs
+        }))
+      };
+    }
+
+    async function sendSubmission(payload) {
+      if (!CONFIG.endpointUrl || CONFIG.endpointUrl === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL") {
+        return { skipped: true };
+      }
+
+      const response = await fetch(CONFIG.endpointUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const text = await response.text();
+      let json = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch (err) {
+        json = { raw: text };
+      }
+
+      if (!response.ok) {
+        throw new Error(json?.message || "資料送出失敗");
+      }
+
+      return json;
+    }
+
+    function addSubmissionMeta(payload) {
+      return {
+        ...payload,
+        app_version: CONFIG.appVersion,
+        submitted_client_at: nowIso(),
+        phone_normalized: (payload.phone || "").replace(/[^0-9]/g, "")
+      };
+    }
+
+    async function finalizeStudy() {
+      state.endAt = nowIso();
+      state.submission = addSubmissionMeta(buildSubmission());
+
+      let submitStatus = "尚未送出雲端。請先設定 endpointUrl。";
+      let submitClass = "notice";
+      let submissionId = "";
+
+      try {
+        const result = await sendSubmission(state.submission);
+        if (result?.skipped) {
+          submitStatus = "尚未送出雲端。請先設定 endpointUrl。";
+          submitClass = "notice";
+        } else {
+          submitStatus = "資料已成功送出，感謝您的協助。";
+          submitClass = "success";
+          submissionId = result?.submission_id ? `<p class="small">Submission ID：${escapeHtml(result.submission_id)}</p>` : "";
+        }
+      } catch (err) {
+        submitStatus = `資料送出失敗：${escapeHtml(err.message)}`;
+        submitClass = "notice";
+      }
+
+      render(`
+        <h2 class="section-title">For you. For me. Formosa.</h2>
+        <p class="subtle">謝謝各位正音師協助，您已完成 Stage 1 / Round 1。<br>幾日後將發布 Round 2，懇請您繼續提供協助，讓我們一起實現夢想。</p>
+        <p class="${submitClass}">${submitStatus}</p>
+        ${submissionId}
+        <div class="button-row">
+          <button id="downloadBtn" class="btn-secondary">下載本次 JSON 紀錄</button>
+        </div>
+      `);
+
+      document.getElementById("downloadBtn").addEventListener("click", downloadJson);
+      console.log("Stage 1 submission", state.submission);
+    }
+
+    function downloadJson() {
+      const blob = new Blob([JSON.stringify(state.submission, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${state.participantId}_stage1.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderError(message) {
+      render(`
+        <h2 class="section-title">發生問題</h2>
+        <p class="notice">${escapeHtml(message)}</p>
+        <div class="button-row">
+          <button id="retryBtn" class="btn-primary">重新開始</button>
+        </div>
+      `);
+      document.getElementById("retryBtn").addEventListener("click", showWelcome);
+    }
+
+    showWelcome();
+  </script>
+</body>
+</html>
