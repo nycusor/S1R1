@@ -136,7 +136,66 @@
       font-weight: 700;
       line-height: 1.6;
     }
+.play-wrap {
+  margin-top: 18px;
+}
 
+.answer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.question-number {
+  margin-top: 10px;
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: var(--danger);
+  line-height: 1.2;
+}
+
+.question-meta {
+  font-size: 1rem;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+#playBtn {
+  width: 100%;
+  min-height: 76px;
+  font-size: 1.18rem;
+  border-radius: 18px;
+}
+
+#leftBtn,
+#rightBtn {
+  width: 100%;
+  min-height: 96px;
+  padding: 18px 14px;
+  font-size: 1.12rem;
+  line-height: 1.35;
+  border-radius: 18px;
+}
+
+@media (max-width: 520px) {
+  .question-number {
+    font-size: 1.7rem;
+  }
+
+  #playBtn {
+    min-height: 82px;
+    font-size: 1.22rem;
+  }
+
+  #leftBtn,
+  #rightBtn {
+    min-height: 104px;
+    font-size: 1.06rem;
+    padding: 18px 10px;
+  }
+}
     @media (min-width: 680px) {
       .card { padding: 28px 26px; }
     }
@@ -563,18 +622,24 @@
       const currentItem = run.logs.length + 1;
       const totalAllowed = CONFIG.maxInitialPerPair + CONFIG.maxFallbackPerPair;
 
-      render(`
-        <div class="progress">目前進度：第${state.pairIndex + 1}組/共3組</div>
-        <h2 class="section-title">${meta.title}</h2>
-        <div class="small">第 ${currentItem} 題</div>
-        <div class="small">本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）</div>
-        <div class="button-row">
-          <button id="playBtn" class="btn-primary">播放本題聲音</button>
-          <button id="leftBtn" class="btn-answer" disabled>${meta.leftLabel}</button>
-          <button id="rightBtn" class="btn-answer alt" disabled>${meta.rightLabel}</button>
-        </div>
-        <div id="questionNotice" class="notice"></div>
-      `);
+   render(`
+  <div class="progress">目前進度：第${state.pairIndex + 1}組/共3組</div>
+  <h2 class="section-title">${meta.title}</h2>
+
+  <div class="question-number">第 ${currentItem} 題</div>
+  <div class="question-meta">本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）</div>
+
+  <div class="play-wrap">
+    <button id="playBtn" class="btn-primary">▶ 播放本題聲音</button>
+  </div>
+
+  <div class="answer-row">
+    <button id="leftBtn" class="btn-answer" disabled>${meta.leftLabel}</button>
+    <button id="rightBtn" class="btn-answer alt" disabled>${meta.rightLabel}</button>
+  </div>
+
+  <div id="questionNotice" class="notice"></div>
+`);
 
       const playBtn = document.getElementById("playBtn");
       const leftBtn = document.getElementById("leftBtn");
