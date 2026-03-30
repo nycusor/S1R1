@@ -95,7 +95,7 @@
 
     .btn-primary {
       background: var(--primary);
-      color: #172033;
+      color: var(--text);
     }
 
     .btn-secondary {
@@ -104,12 +104,13 @@
     }
 
     .btn-answer {
-      background: #f9a8d4;
+      background: #f472b6;
       color: #fff;
     }
 
     .btn-answer.alt {
       background: #60a5fa;
+      color: #fff;
     }
 
     .progress {
@@ -168,8 +169,6 @@
       min-height: 76px;
       font-size: 1.18rem;
       border-radius: 18px;
-      background: #c4b5fd;
-      color: #ffffff;
     }
 
     #leftBtn,
@@ -217,13 +216,14 @@
   <script>
     const CONFIG = {
       endpointUrl: "https://script.google.com/macros/s/AKfycbz2Obw-lKcZQ4ko3XDZNCgvecxVzviVVpB-nKgpQRdtneeufySRk88Hbe2MPjbxxX3MKg/exec",
-      appVersion: "round1-stage1-id-v4-no-phone",
+      appVersion: "round1-stage1-id-dynamic-odd-v1",
       audioBase: "audio/",
       audioExt: "mp3",
       totalPairs: ["A", "B", "C"],
       maxInitialPerPair: 12,
       maxFallbackPerPair: 4,
-      steps: Array.from({ length: 10 }, (_, i) => i + 1),
+      defaultContinuumCount: 9,
+      minContinuumCount: 5,
       pairMeta: {
         A: {
           title: "第1組：ㄝ還是ㄝㄚ",
@@ -250,6 +250,7 @@
       participantId: createParticipantId(),
       name: "",
       classNo: "",
+      continuumCount: CONFIG.defaultContinuumCount,
       startAt: null,
       endAt: null,
       pairIndex: 0,
@@ -276,12 +277,42 @@
       }[m]));
     }
 
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    function getMaxStep() {
+      return state.continuumCount;
+    }
+
+    function getStepList() {
+      return Array.from({ length: getMaxStep() }, (_, i) => i + 1);
+    }
+
+    function getAnchorSteps() {
+      return [1, getMaxStep(), 2, getMaxStep() - 1];
+    }
+
     function fileName(pair, step) {
       return `${CONFIG.audioBase}${pair}_${String(step).padStart(2, "0")}.${CONFIG.audioExt}`;
     }
 
-    function nowIso() {
-      return new Date().toISOString();
+    function validateContinuumCount(rawValue) {
+      const count = Number(rawValue);
+
+      if (!Number.isInteger(count)) {
+        return { ok: false, message: "請輸入整數連續體數量。" };
+      }
+
+      if (count < CONFIG.minContinuumCount) {
+        return { ok: false, message: `連續體數量至少需為 ${CONFIG.minContinuumCount}。` };
+      }
+
+      if (count % 2 === 0) {
+        return { ok: false, message: "連續體數量需為奇數，例如 9、11、13。" };
+      }
+
+      return { ok: true, value: count };
     }
 
     async function unlockAudio() {
@@ -305,6 +336,7 @@
     function createPairRun(pair) {
       return {
         pair,
+        continuum_count: getMaxStep(),
         started_at: nowIso(),
         completed_at: null,
         stage: "anchors",
@@ -327,6 +359,7 @@
       if (!run.responsesByStep[step]) {
         run.responsesByStep[step] = { A1: 0, A2: 0, total: 0, history: [] };
       }
+
       run.responsesByStep[step][choice] += 1;
       run.responsesByStep[step].total += 1;
       run.responsesByStep[step].history.push({ choice, phase, at: nowIso() });
@@ -359,21 +392,22 @@
 
     function highestMajorityA1(run) {
       let found = null;
-      for (const step of CONFIG.steps) {
+      for (const step of getStepList()) {
         if (classifyMajority(run, step) === "A1") found = step;
       }
       return found;
     }
 
     function lowestMajorityA2(run) {
-      for (const step of CONFIG.steps) {
+      for (const step of getStepList()) {
         if (classifyMajority(run, step) === "A2") return step;
       }
       return null;
     }
 
     function findAdjacentBracket(run) {
-      for (let s = 1; s <= 9; s++) {
+      const maxStep = getMaxStep();
+      for (let s = 1; s < maxStep; s++) {
         if (classifyMajority(run, s) === "A1" && classifyMajority(run, s + 1) === "A2") {
           return { low: s, high: s + 1 };
         }
@@ -392,8 +426,10 @@
     }
 
     function findCoarseWindow(run) {
+      const maxStep = getMaxStep();
       const maxA1 = highestMajorityA1(run);
       const minA2 = lowestMajorityA2(run);
+
       if (maxA1 == null || minA2 == null) return null;
 
       if (minA2 - maxA1 >= 2) {
@@ -401,7 +437,7 @@
       }
 
       if (minA2 - maxA1 === 1) {
-        if (minA2 + 1 <= 10 && classifyMajority(run, minA2 + 1) === "A2") {
+        if (minA2 + 1 <= maxStep && classifyMajority(run, minA2 + 1) === "A2") {
           return { low: maxA1, high: minA2 + 1 };
         }
         if (maxA1 - 1 >= 1 && classifyMajority(run, maxA1 - 1) === "A1") {
@@ -413,7 +449,9 @@
     }
 
     function chooseSearchProbe(run) {
+      const maxStep = getMaxStep();
       const bracket = findAdjacentBracket(run);
+
       if (bracket) {
         run.lowBracket = bracket.low;
         run.highBracket = bracket.high;
@@ -421,7 +459,8 @@
       }
 
       const low = highestMajorityA1(run) ?? 2;
-      const high = lowestMajorityA2(run) ?? 9;
+      const high = lowestMajorityA2(run) ?? Math.max(2, maxStep - 1);
+
       if (high - low <= 1) return null;
 
       let probe = Math.floor((low + high) / 2);
@@ -432,13 +471,16 @@
       for (let offset = 1; offset <= 3; offset++) {
         const left = probe - offset;
         const right = probe + offset;
+
         if (left > low && (run.responsesByStep[left]?.total || 0) < 2) return left;
         if (right < high && (run.responsesByStep[right]?.total || 0) < 2) return right;
       }
+
       return null;
     }
 
     function decideNextStep(run) {
+      const maxStep = getMaxStep();
       const initialCount = run.logs.length;
       const bracket = findAdjacentBracket(run);
 
@@ -462,6 +504,7 @@
       }
 
       const coarse = findCoarseWindow(run);
+
       if (coarse) {
         const lowDone = hasTwoConsistent(run, coarse.low, "A1");
         const highDone = hasTwoConsistent(run, coarse.high, "A2");
@@ -487,11 +530,12 @@
 
       if (coarse) {
         if (coarse.low - 1 >= 1 && (run.responsesByStep[coarse.low - 1]?.total || 0) < 2) return coarse.low - 1;
-        if (coarse.high + 1 <= 10 && (run.responsesByStep[coarse.high + 1]?.total || 0) < 2) return coarse.high + 1;
+        if (coarse.high + 1 <= maxStep && (run.responsesByStep[coarse.high + 1]?.total || 0) < 2) return coarse.high + 1;
       }
 
       const low = highestMajorityA1(run);
       const high = lowestMajorityA2(run);
+
       if (low != null && !hasTwoConsistent(run, low, "A1")) return low;
       if (high != null && !hasTwoConsistent(run, high, "A2")) return high;
 
@@ -503,20 +547,29 @@
     function getNextStep(run) {
       if (run.logs.length < 4) {
         run.stage = "anchors";
-        return [1, 10, 2, 9][run.logs.length] ?? null;
+        return getAnchorSteps()[run.logs.length] ?? null;
       }
       return decideNextStep(run);
     }
 
     function showWelcome() {
       const options = Array.from({ length: 15 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+
       render(`
         <h2 class="section-title">聲音二選一 (Round 1/Stage 1)</h2>
-        <p class="subtle">1. 本實驗限正音師參加。<br>2. 請填寫以下基本資料。<br>3. 建議找個安靜的環境。</p>
+        <p class="subtle">
+          本實驗限正音師參加。<br>
+          請填寫以下基本資料。<br>
+          連續體數量請輸入奇數，例如 9、11、13。<br>
+          題組仍固定為 A / B / C 三組。<br>
+          建議找個安靜的環境。
+        </p>
+
         <div class="field">
           <label for="name">姓名</label>
           <input id="name" type="text" placeholder="請輸入姓名" value="${escapeHtml(state.name)}" />
         </div>
+
         <div class="field">
           <label for="classNo">班別</label>
           <select id="classNo">
@@ -524,9 +577,24 @@
             ${options}
           </select>
         </div>
+
+        <div class="field">
+          <label for="continuumCount">連續體數量（奇數）</label>
+          <input
+            id="continuumCount"
+            type="number"
+            inputmode="numeric"
+            min="${CONFIG.minContinuumCount}"
+            step="2"
+            placeholder="例如 9"
+            value="${escapeHtml(state.continuumCount)}"
+          />
+        </div>
+
         <div class="button-row">
           <button id="startBtn" class="btn-primary">準備完請按下一步</button>
         </div>
+
         <div id="welcomeNotice" class="notice"></div>
       `);
 
@@ -535,13 +603,21 @@
       document.getElementById("startBtn").addEventListener("click", async () => {
         const name = document.getElementById("name").value.trim();
         const classNo = document.getElementById("classNo").value;
+        const continuumRaw = document.getElementById("continuumCount").value.trim();
+        const continuumCheck = validateContinuumCount(continuumRaw);
 
         if (!name) {
           document.getElementById("welcomeNotice").textContent = "請填寫姓名。";
           return;
         }
+
         if (!classNo) {
           document.getElementById("welcomeNotice").textContent = "請選擇班別。";
+          return;
+        }
+
+        if (!continuumCheck.ok) {
+          document.getElementById("welcomeNotice").textContent = continuumCheck.message;
           return;
         }
 
@@ -549,6 +625,7 @@
           await unlockAudio();
           state.name = name;
           state.classNo = classNo;
+          state.continuumCount = continuumCheck.value;
           state.startAt = nowIso();
           showGlobalPracticeIntro();
         } catch (err) {
@@ -558,15 +635,19 @@
     }
 
     function showGlobalPracticeIntro() {
+      const maxStep = getMaxStep();
+
       render(`
         <h2 class="section-title">Global Practice</h2>
         <p class="subtle">接下來您將聽到幾個聲音，聽完後請選擇您認為最接近的選項：</p>
         <div class="subtle">
           第1組：Getch (ㄝ) 或 Gatch (ㄝㄚ)<br>
           第2組：Neef (微笑ㄧ) 或 Niff (ㄧㄜ)<br>
-          第3組：Heff (ㄝ) 或 Hafe (ㄝㄧ)
+          第3組：Heff (ㄝ) 或 Hafe (ㄝㄧ)<br>
+          本次連續體總數：${maxStep}
         </div>
         <p class="subtle">播放次數無限制，若不確定聲音比較接近哪一個，可多聽幾次。<br>請點以下範例：</p>
+
         <div class="button-row">
           <button id="gpA1" class="btn-secondary">Getch</button>
           <button id="gpA2" class="btn-secondary">Gatch</button>
@@ -576,15 +657,16 @@
           <button id="gpC2" class="btn-secondary">Hafe</button>
           <button id="practiceNextBtn" class="btn-primary">下一步</button>
         </div>
+
         <p class="small">全部聽完後，請按下一步。</p>
       `);
 
       document.getElementById("gpA1").addEventListener("click", () => playSingle("A", 1).catch(err => renderError(err.message)));
-      document.getElementById("gpA2").addEventListener("click", () => playSingle("A", 10).catch(err => renderError(err.message)));
+      document.getElementById("gpA2").addEventListener("click", () => playSingle("A", maxStep).catch(err => renderError(err.message)));
       document.getElementById("gpB1").addEventListener("click", () => playSingle("B", 1).catch(err => renderError(err.message)));
-      document.getElementById("gpB2").addEventListener("click", () => playSingle("B", 10).catch(err => renderError(err.message)));
+      document.getElementById("gpB2").addEventListener("click", () => playSingle("B", maxStep).catch(err => renderError(err.message)));
       document.getElementById("gpC1").addEventListener("click", () => playSingle("C", 1).catch(err => renderError(err.message)));
-      document.getElementById("gpC2").addEventListener("click", () => playSingle("C", 10).catch(err => renderError(err.message)));
+      document.getElementById("gpC2").addEventListener("click", () => playSingle("C", maxStep).catch(err => renderError(err.message)));
 
       document.getElementById("practiceNextBtn").addEventListener("click", () => {
         state.pairIndex = 0;
@@ -615,7 +697,10 @@
         <h2 class="section-title">${meta.title}</h2>
 
         <div class="question-number">第 ${currentItem} 題</div>
-        <div class="question-meta">本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）</div>
+        <div class="question-meta">
+          本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）<br>
+          本次連續體總數：${getMaxStep()}
+        </div>
 
         <div class="play-wrap">
           <button id="playBtn" class="btn-primary">▶ 播放本題聲音</button>
@@ -636,6 +721,7 @@
       playBtn.addEventListener("click", async () => {
         playBtn.disabled = true;
         playBtn.textContent = "播放中...";
+
         try {
           await playSingle(pair, nextStep);
           leftBtn.disabled = false;
@@ -685,6 +771,7 @@
         participant_id: state.participantId,
         name: state.name,
         class_no: state.classNo,
+        continuum_count: state.continuumCount,
         round: 1,
         stage: 1,
         start_at: state.startAt,
@@ -694,6 +781,7 @@
         submitted_client_at: new Date().toISOString(),
         pair_runs: state.pairRuns.map(run => ({
           pair: run.pair,
+          continuum_count: run.continuum_count,
           started_at: run.started_at,
           completed_at: run.completed_at,
           status: run.status,
@@ -715,11 +803,22 @@
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      let result = null;
+      try {
+        result = await response.json();
+      } catch (_) {
+        result = null;
       }
 
-      return response.json().catch(() => ({ ok: true }));
+      if (!response.ok) {
+        throw new Error(result?.message || `HTTP ${response.status}`);
+      }
+
+      if (result && result.ok === false) {
+        throw new Error(result.message || "Server returned ok:false");
+      }
+
+      return result || { ok: true };
     }
 
     async function finalizeStudy() {
@@ -745,7 +844,10 @@
 
       render(`
         <h2 class="section-title">For you. For me. Formosa.</h2>
-        <p class="subtle">謝謝各位正音師協助，您已完成 Round 1/Stage 1。<br>幾日後將發布 Round 1/Stage 2，懇請您繼續提供協助，讓我們一起完成大業。</p>
+        <p class="subtle">
+          謝謝各位正音師協助，您已完成 Round 1/Stage 1。<br>
+          幾日後將發布 Round 1/Stage 2，懇請您繼續提供協助，讓我們一起完成大業。
+        </p>
         ${submitStatus ? `<p class="${submitClass}">${escapeHtml(submitStatus)}</p>` : ""}
       `);
 
@@ -760,6 +862,7 @@
           <button id="retryBtn" class="btn-primary">重新開始</button>
         </div>
       `);
+
       document.getElementById("retryBtn").addEventListener("click", showWelcome);
     }
 
