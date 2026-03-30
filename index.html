@@ -104,12 +104,12 @@
     }
 
     .btn-answer {
-      background: #172033;
+      background: #f9a8d4;
       color: #fff;
     }
 
     .btn-answer.alt {
-      background: #394152;
+      background: #60a5fa;
     }
 
     .progress {
@@ -136,66 +136,68 @@
       font-weight: 700;
       line-height: 1.6;
     }
-.play-wrap {
-  margin-top: 18px;
-}
 
-.answer-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 16px;
-}
+    .play-wrap {
+      margin-top: 18px;
+    }
 
-.question-number {
-  margin-top: 10px;
-  font-size: 1.55rem;
-  font-weight: 900;
-  color: var(--danger);
-  line-height: 1.2;
-}
+    .answer-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 16px;
+    }
 
-.question-meta {
-  font-size: 1rem;
-  color: var(--muted);
-  margin-top: 8px;
-  line-height: 1.6;
-}
+    .question-number {
+      margin-top: 10px;
+      font-size: 1.55rem;
+      font-weight: 900;
+      color: var(--danger);
+      line-height: 1.2;
+    }
 
-#playBtn {
-  width: 100%;
-  min-height: 76px;
-  font-size: 1.18rem;
-  border-radius: 18px;
-}
+    .question-meta {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.6;
+    }
 
-#leftBtn,
-#rightBtn {
-  width: 100%;
-  min-height: 96px;
-  padding: 18px 14px;
-  font-size: 1.12rem;
-  line-height: 1.35;
-  border-radius: 18px;
-}
+    #playBtn {
+      width: 100%;
+      min-height: 76px;
+      font-size: 1.18rem;
+      border-radius: 18px;
+    }
 
-@media (max-width: 520px) {
-  .question-number {
-    font-size: 1.7rem;
-  }
+    #leftBtn,
+    #rightBtn {
+      width: 100%;
+      min-height: 96px;
+      padding: 18px 14px;
+      font-size: 1.12rem;
+      line-height: 1.35;
+      border-radius: 18px;
+    }
 
-  #playBtn {
-    min-height: 82px;
-    font-size: 1.22rem;
-  }
+    @media (max-width: 520px) {
+      .question-number {
+        font-size: 1.7rem;
+      }
 
-  #leftBtn,
-  #rightBtn {
-    min-height: 104px;
-    font-size: 1.06rem;
-    padding: 18px 10px;
-  }
-}
+      #playBtn {
+        min-height: 82px;
+        font-size: 1.22rem;
+      }
+
+      #leftBtn,
+      #rightBtn {
+        min-height: 104px;
+        font-size: 1.06rem;
+        padding: 18px 10px;
+      }
+    }
+
     @media (min-width: 680px) {
       .card { padding: 28px 26px; }
     }
@@ -213,7 +215,7 @@
   <script>
     const CONFIG = {
       endpointUrl: "https://script.google.com/macros/s/AKfycbz2Obw-lKcZQ4ko3XDZNCgvecxVzviVVpB-nKgpQRdtneeufySRk88Hbe2MPjbxxX3MKg/exec",
-      appVersion: "round1-stage1-id-v3",
+      appVersion: "round1-stage1-id-v4-no-phone",
       audioBase: "audio/",
       audioExt: "mp3",
       totalPairs: ["A", "B", "C"],
@@ -245,7 +247,6 @@
     const state = {
       participantId: createParticipantId(),
       name: "",
-      phone: "",
       classNo: "",
       startAt: null,
       endAt: null,
@@ -275,11 +276,6 @@
 
     function fileName(pair, step) {
       return `${CONFIG.audioBase}${pair}_${String(step).padStart(2, "0")}.${CONFIG.audioExt}`;
-    }
-
-    function isValidPhone(phone) {
-      if (!phone.trim()) return true;
-      return /^[0-9+\-\s()]{8,20}$/.test(phone.trim());
     }
 
     function nowIso() {
@@ -514,7 +510,7 @@
       const options = Array.from({ length: 15 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
       render(`
         <h2 class="section-title">聲音二選一 (Round 1/Stage 1)</h2>
-        <p class="subtle">本實驗限正音師參加。<br>請填寫以下基本資料。<br>電話為自由選填，僅供抽獎使用。<br>建議找個安靜的環境。</p>
+        <p class="subtle">本實驗限正音師參加。<br>請填寫以下基本資料。<br>建議找個安靜的環境。</p>
         <div class="field">
           <label for="name">姓名</label>
           <input id="name" type="text" placeholder="請輸入姓名" value="${escapeHtml(state.name)}" />
@@ -526,10 +522,6 @@
             ${options}
           </select>
         </div>
-        <div class="field">
-          <label for="phone">電話（選填）</label>
-          <input id="phone" type="tel" placeholder="請輸入電話號碼（選填）" value="${escapeHtml(state.phone)}" />
-        </div>
         <div class="button-row">
           <button id="startBtn" class="btn-primary">準備完請按下一步</button>
         </div>
@@ -540,7 +532,6 @@
 
       document.getElementById("startBtn").addEventListener("click", async () => {
         const name = document.getElementById("name").value.trim();
-        const phone = document.getElementById("phone").value.trim();
         const classNo = document.getElementById("classNo").value;
 
         if (!name) {
@@ -551,15 +542,10 @@
           document.getElementById("welcomeNotice").textContent = "請選擇班別。";
           return;
         }
-        if (!isValidPhone(phone)) {
-          document.getElementById("welcomeNotice").textContent = "請輸入正確的電話號碼，或留白。";
-          return;
-        }
 
         try {
           await unlockAudio();
           state.name = name;
-          state.phone = phone;
           state.classNo = classNo;
           state.startAt = nowIso();
           showGlobalPracticeIntro();
@@ -622,24 +608,24 @@
       const currentItem = run.logs.length + 1;
       const totalAllowed = CONFIG.maxInitialPerPair + CONFIG.maxFallbackPerPair;
 
-   render(`
-  <div class="progress">目前進度：第${state.pairIndex + 1}組/共3組</div>
-  <h2 class="section-title">${meta.title}</h2>
+      render(`
+        <div class="progress">目前進度：第${state.pairIndex + 1}組/共3組</div>
+        <h2 class="section-title">${meta.title}</h2>
 
-  <div class="question-number">第 ${currentItem} 題</div>
-  <div class="question-meta">本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）</div>
+        <div class="question-number">第 ${currentItem} 題</div>
+        <div class="question-meta">本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）</div>
 
-  <div class="play-wrap">
-    <button id="playBtn" class="btn-primary">▶ 播放本題聲音</button>
-  </div>
+        <div class="play-wrap">
+          <button id="playBtn" class="btn-primary">▶ 播放本題聲音</button>
+        </div>
 
-  <div class="answer-row">
-    <button id="leftBtn" class="btn-answer" disabled>${meta.leftLabel}</button>
-    <button id="rightBtn" class="btn-answer alt" disabled>${meta.rightLabel}</button>
-  </div>
+        <div class="answer-row">
+          <button id="leftBtn" class="btn-answer" disabled>${meta.leftLabel}</button>
+          <button id="rightBtn" class="btn-answer alt" disabled>${meta.rightLabel}</button>
+        </div>
 
-  <div id="questionNotice" class="notice"></div>
-`);
+        <div id="questionNotice" class="notice"></div>
+      `);
 
       const playBtn = document.getElementById("playBtn");
       const leftBtn = document.getElementById("leftBtn");
@@ -675,6 +661,7 @@
     function finishCurrentPair() {
       const run = state.currentRun;
       run.completed_at = nowIso();
+
       if (run.status === "running") {
         run.status = "unresolved";
         run.final_reason = "manual_finish_without_resolution";
@@ -695,7 +682,6 @@
       return {
         participant_id: state.participantId,
         name: state.name,
-        phone: state.phone,
         class_no: state.classNo,
         round: 1,
         stage: 1,
@@ -721,15 +707,10 @@
     async function sendSubmission(payload) {
       if (!CONFIG.endpointUrl) return { skipped: true };
 
-      const payloadToSend = {
-        ...payload,
-        phone_normalized: String(payload.phone || "").replace(/[^\d]/g, "")
-      };
-
       const response = await fetch(CONFIG.endpointUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payloadToSend)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
