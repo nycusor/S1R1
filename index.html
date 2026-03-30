@@ -576,19 +576,6 @@
           </select>
         </div>
 
-        <div class="field">
-          <label for="continuumCount">連續體數量（奇數）</label>
-          <input
-            id="continuumCount"
-            type="number"
-            inputmode="numeric"
-            min="${CONFIG.minContinuumCount}"
-            step="2"
-            placeholder="例如 9"
-            value="${escapeHtml(state.continuumCount)}"
-          />
-        </div>
-
         <div class="button-row">
           <button id="startBtn" class="btn-primary">準備完請按下一步</button>
         </div>
@@ -601,8 +588,6 @@
       document.getElementById("startBtn").addEventListener("click", async () => {
         const name = document.getElementById("name").value.trim();
         const classNo = document.getElementById("classNo").value;
-        const continuumRaw = document.getElementById("continuumCount").value.trim();
-        const continuumCheck = validateContinuumCount(continuumRaw);
 
         if (!name) {
           document.getElementById("welcomeNotice").textContent = "請填寫姓名。";
@@ -614,16 +599,11 @@
           return;
         }
 
-        if (!continuumCheck.ok) {
-          document.getElementById("welcomeNotice").textContent = continuumCheck.message;
-          return;
-        }
-
         try {
           await unlockAudio();
           state.name = name;
           state.classNo = classNo;
-          state.continuumCount = continuumCheck.value;
+          state.continuumCount = CONFIG.defaultContinuumCount;
           state.startAt = nowIso();
           showGlobalPracticeIntro();
         } catch (err) {
