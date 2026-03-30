@@ -297,24 +297,6 @@
       return `${CONFIG.audioBase}${pair}_${String(step).padStart(2, "0")}.${CONFIG.audioExt}`;
     }
 
-    function validateContinuumCount(rawValue) {
-      const count = Number(rawValue);
-
-      if (!Number.isInteger(count)) {
-        return { ok: false, message: "請輸入整數連續體數量。" };
-      }
-
-      if (count < CONFIG.minContinuumCount) {
-        return { ok: false, message: `連續體數量至少需為 ${CONFIG.minContinuumCount}。` };
-      }
-
-      if (count % 2 === 0) {
-        return { ok: false, message: "連續體數量需為奇數，例如 9、11、13。" };
-      }
-
-      return { ok: true, value: count };
-    }
-
     async function unlockAudio() {
       return;
     }
@@ -622,7 +604,6 @@
           第1組：Getch (ㄝ) 或 Gatch (ㄝㄚ)<br>
           第2組：Neef (微笑ㄧ) 或 Niff (ㄧㄜ)<br>
           第3組：Heff (ㄝ) 或 Hafe (ㄝㄧ)<br>
-          本次連續體總數：${maxStep}
         </div>
         <p class="subtle">播放次數無限制，若不確定聲音比較接近哪一個，可多聽幾次。<br>請點以下範例：</p>
 
@@ -677,7 +658,6 @@
         <div class="question-number">第 ${currentItem} 題</div>
         <div class="question-meta">
           本組目前作答題數：${currentItem}（本組上限 ${totalAllowed} 題）<br>
-          本次連續體總數：${getMaxStep()}
         </div>
 
         <div class="play-wrap">
